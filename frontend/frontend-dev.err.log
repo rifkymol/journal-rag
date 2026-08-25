@@ -1,0 +1,169 @@
+
+
+#
+# Fatal process out of memory: Re-embedded builtins: set permissions
+#
+----- Native stack trace -----
+
+ 1: 00007FF61513A2ED node::SetCppgcReference+17725
+ 2: 00007FF61501BDEF node::TriggerNodeReport+73871
+ 3: 00007FF616215336 v8::base::FatalOOM+54
+ 4: 00007FF615C22F33 v8::Isolate::ReportExternalAllocationLimitReached+147
+ 5: 00007FF615C0FB66 v8::Function::Experimental_IsNopFunction+2870
+ 6: 00007FF615AA936B v8::CppHeap::wrapper_descriptor+55115
+ 7: 00007FF615AD0CFA v8::base::CPU::has_sse41+82282
+ 8: 00007FF615ACED59 v8::base::CPU::has_sse41+74185
+ 9: 00007FF6156FDD75 v8::base::AddressSpaceReservation::AddressSpaceReservation+11461
+10: 00007FF615C18B31 v8::Isolate::Initialize+433
+11: 00007FF615178D8D node::NewContext+397
+12: 00007FF614F5D03A RSA_meth_get_flags+214778
+13: 00007FF614F61C4A RSA_meth_get_flags+234250
+14: 00007FF614F573E5 RSA_meth_get_flags+191141
+15: 00007FF615199893 uv_poll_stop+291
+16: 00007FF6169212DE inflateValidate+159742
+17: 00007FFC987FCCB7 BaseThreadInitThunk+23
+18: 00007FFC997CAD6C RtlUserThreadStart+44
+
+<--- Last few GCs --->
+
+
+<--- JS stacktrace --->
+
+FATAL ERROR: Committing semi space failed. Allocation failed - JavaScript heap out of memory
+----- Native stack trace -----
+
+ 1: 00007FF61513A2ED 
+ 2: 00007FF6150A1EA8 
+ 3: 00007FF615C22EE1 
+ 4: 00007FF615C0FB66 
+ 5: 00007FF615A5CDC0 
+ 6: 00007FF615A158D3 
+ 7: 00007FF615A65F0F 
+ 8: 00007FF615A56752 
+ 9: 00007FF615A52155 
+10: 00007FF6153D54CD 
+
+
+#
+# Fatal process out of memory: Failed to reserve virtual memory for CodeRange
+
+#
+<--- Last few GCs --->
+----- Native stack trace -----
+
+
+
+ 1: 00007FF61513A2ED node::SetCppgcReference+17725
+<--- JS stacktrace --->
+ 2: 00007FF61501BDEF node::TriggerNodeReport+73871
+
+ 3: 00007FF616215336 v8::base::FatalOOM+54
+FATAL ERROR: Committing semi space failed. Allocation failed - JavaScript heap out of memory
+ 4: 00007FF615C22F33 v8::Isolate::ReportExternalAllocationLimitReached+147
+----- Native stack trace -----
+ 5: 00007FF615C0FB66 v8::Function::Experimental_IsNopFunction+2870
+
+ 6: 00007FF615A6AA8E v8::internal::StrongRootAllocatorBase::StrongRootAllocatorBase+87982
+ 1: 00007FF61513A2ED 
+ 7: 00007FF615ACECA7 v8::base::CPU::has_sse41+74007
+ 2: 00007FF6150A1EA8 
+ 8: 00007FF6156FDD75 v8::base::AddressSpaceReservation::AddressSpaceReservation+11461
+ 3: 00007FF615C22EE1 
+ 9: 00007FF615C18B31 v8::Isolate::Initialize+433
+ 4: 00007FF615C0FB66 
+10: 00007FF615178D8D node::NewContext+397
+ 5: 00007FF615A5CDC0 
+11: 00007FF614F5D03A RSA_meth_get_flags+214778
+ 6: 00007FF615A158D3 
+12: 00007FF614F61C4A RSA_meth_get_flags+234250
+ 7: 00007FF615A65F0F 
+13: 00007FF614F573E5 RSA_meth_get_flags+191141
+ 8: 00007FF615A56752 
+14: 00007FF615199893 uv_poll_stop+291
+ 9: 00007FF615A52155 
+15: 00007FF6169212DE inflateValidate+159742
+10: 00007FF6153D54CD 
+16: 00007FFC987FCCB7 BaseThreadInitThunk+23
+17: 00007FFC997CAD6C RtlUserThreadStart+44
+
+<--- Last few GCs --->
+
+
+
+
+
+
+#
+<--- JS stacktrace --->
+<--- Last few GCs --->
+<--- Last few GCs --->
+# Fatal process out of memory: Re-embedded builtins: set permissions
+
+
+
+#
+
+
+FATAL ERROR: Committing semi space failed. Allocation failed - JavaScript heap out of memory
+----- Native stack trace -----
+----- Native stack trace -----
+<--- JS stacktrace --->
+<--- JS stacktrace --->
+
+
+
+
+ 1: 00007FF61513A2ED 
+ 1: 00007FF61513A2ED node::SetCppgcReference+17725
+FATAL ERROR: Committing semi space failed. Allocation failed - JavaScript heap out of memory
+FATAL ERROR: Committing semi space failed. Allocation failed - JavaScript heap out of memory
+ 2: 00007FF61501BDEF 
+ 2: 00007FF6150A1EA8 v8::base::CPU::num_virtual_address_bits+92328
+----- Native stack trace -----
+----- Native stack trace -----
+ 3: 00007FF616215336 
+ 3: 00007FF615C22EE1 v8::Isolate::ReportExternalAllocationLimitReached+65
+
+
+ 4: 00007FF615C0FB66 v8::Function::Experimental_IsNopFunction+2870
+ 4: 00007FF615C22F33 
+ 1: 00007FF61513A2ED 
+ 1: 00007FF61513A2ED 
+ 5: 00007FF615A5CDC0 v8::internal::StrongRootAllocatorBase::StrongRootAllocatorBase+31456
+ 2: 00007FF6150A1EA8 
+ 5: 00007FF615C0FB66 
+ 3: 00007FF615C22EE1 
+ 6: 00007FF615A158D3 v8::PrimitiveArray::Length+130291
+ 2: 00007FF6150A1EA8 
+ 6: 00007FF615AA936B 
+ 3: 00007FF615C22EE1 
+ 7: 00007FF615A65F0F v8::internal::StrongRootAllocatorBase::StrongRootAllocatorBase+68655
+ 4: 00007FF615C0FB66 
+ 7: 00007FF615AD0CFA 
+ 4: 00007FF615C0FB66 
+ 8: 00007FF615A56752 v8::internal::StrongRootAllocatorBase::StrongRootAllocatorBase+5234
+ 5: 00007FF615A5CDC0 
+ 8: 00007FF615ACED59 
+ 5: 00007FF615A5CDC0 
+ 9: 00007FF615A52155 v8::CpuProfileNode::GetScriptResourceNameStr+188453
+ 6: 00007FF615A158D3 
+ 9: 00007FF6156FDD75 
+ 6: 00007FF615A158D3 
+10: 00007FF6153D54CD BIO_ssl_shutdown+189
+ 7: 00007FF615A65F0F 
+10: 00007FF615C18B31 
+ 7: 00007FF615A65F0F 
+ 8: 00007FF615A56752 
+11: 00007FF615178D8D 
+ 8: 00007FF615A56752 
+ 9: 00007FF615A52155 
+12: 00007FF614F5D03A 
+ 9: 00007FF615A52155 
+10: 00007FF6153D54CD 
+13: 00007FF614F61C4A 
+14: 00007FF614F573E5 
+15: 00007FF615199893 
+10: 00007FF6153D54CD 
+16: 00007FF6169212DE 
+17: 00007FFC987FCCB7 BaseThreadInitThunk+23
+18: 00007FFC997CAD6C RtlUserThreadStart+44

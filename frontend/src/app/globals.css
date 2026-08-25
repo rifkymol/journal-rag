@@ -1,0 +1,53 @@
+@import "tailwindcss";
+
+:root {
+  --surface: #f5f7f4;
+  --soft: #eef3ed;
+  --ink: #1b2420;
+  --muted: #66756d;
+  --line: #dbe3dd;
+  --accent: #287b5d;
+  --accent-strong: #1f654c;
+  --success: #ecf8f1;
+  --success-line: #b8dfc7;
+  --success-ink: #1d6940;
+  --warning: #fff4df;
+  --warning-line: #f0cf91;
+  --warning-ink: #7b4f17;
+  --background: var(--surface);
+  --foreground: var(--ink);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-geist-sans), "Segoe UI", sans-serif;
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+}
+
+::selection {
+  background: #cce6da;
+  color: var(--ink);
+}
+
+@keyframes upload-processing {
+  0% {
+    transform: translateX(-120%);
+  }
+
+  100% {
+    transform: translateX(320%);
+  }
+}
