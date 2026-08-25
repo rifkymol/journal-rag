@@ -19,6 +19,7 @@ from app.vector_store import (
 
 class RAGState(TypedDict):
     messages: Annotated[list[BaseMessage], add_messages]
+    search_query: str
     context: str
 
 
@@ -27,11 +28,9 @@ retriever = create_retriever(vector_store)
 
 
 def retrieve(state: RAGState):
-    latest_messages = state["messages"][-1]
-
-    question = latest_messages.content
-
-    documents = retriever.invoke(question)
+    documents = retriever.invoke(
+        state["search_query"]
+    )
 
     context = "\n\n".join(
         document.page_content
@@ -44,7 +43,7 @@ def retrieve(state: RAGState):
 
 def generate(state: RAGState):
     system_message = SystemMessage(
-        context=f"""
+        content=f"""
 You are an assistant that answers question based only on the provided journal context.
 
 Answer based only on the provided journal context.
@@ -66,12 +65,39 @@ if you don't find the answer, just say so
         "messages": [response]
     }
 
+def rewrite_query(state: RAGState):
+    messages = state["messages"]
+
+    system_message = SystemMessage(
+        content=f"""
+
+Rewrite the user's latest question into a standalone search query.
+
+Use the conversation history to resolve references such as:
+"it", "that", "they", "this method", etc.
+
+return only the rewritten query.
+Do not answer the question
+"""
+    )
+
+    response = llm.invoke([
+        system_message,
+        *messages
+    ])
+
+    return {
+        "search_query": response.content
+    }
+
 graph_builder = StateGraph(RAGState)
 
+graph_builder.add_node("rewrite_query", rewrite_query)
 graph_builder.add_node("retrieve", retrieve)
-graph_builder.add_node("generate",generate)
+graph_builder.add_node("generate", generate)
 
-graph_builder.add_edge(START, "retrieve")
+graph_builder.add_edge(START, "rewrite_query")
+graph_builder.add_edge("rewrite_query", "retrieve")
 graph_builder.add_edge("retrieve", "generate")
 graph_builder.add_edge("generate",END)
 

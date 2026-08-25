@@ -10,7 +10,6 @@ from app.document_loader import load_pdf
 from app.text_splitter import split_documents
 from app.rag import ask_rag
 from app.ingestion import ingest_pdf
-from app.rag_graph import rag_graph
 from app.vector_store import (
     load_vector_store,
     create_retriever
@@ -147,6 +146,7 @@ def graph_chat(request: ChatRequest):
             "messages": [
                 HumanMessage(content=request.message)
             ],
+            "search_query": "",
             "context": ""
         },
         config=config
@@ -174,6 +174,7 @@ async def stream_chat(request: ChatRequest):
                         "content": request.message
                     }
                 ],
+                "search_query": "",
                 "context": ""
             },
             config=config,
