@@ -1,4 +1,5 @@
 from typing import Annotated, TypedDict
+from pathlib import Path
 
 from langchain_core.messages import HumanMessage, AIMessage, BaseMessage
 from langgraph.graph import StateGraph, START, END
@@ -19,8 +20,10 @@ from app.vector_store import (
 
 class RAGState(TypedDict):
     messages: Annotated[list[BaseMessage], add_messages]
+    document_id: str
     search_query: str
     context: str
+    source: list[dict]
 
 
 vector_store = load_vector_store()
@@ -28,6 +31,11 @@ retriever = create_retriever(vector_store)
 
 
 def retrieve(state: RAGState):
+    retriever = create_retriever(
+        vector_store,
+        state["document_id"]
+    )
+
     documents = retriever.invoke(
         state["search_query"]
     )
@@ -37,8 +45,19 @@ def retrieve(state: RAGState):
         for document in documents
     )
 
+    sources = [
+        {
+            "source": Path(
+                document.metadata.get("source", "")
+            ).name,
+            "page": document.metadata.get("page", 0) + 1
+        }
+        for document in documents
+    ]
+
     return {
-        "context": context
+        "context": context,
+        "sources": sources
     }
 
 def generate(state: RAGState):

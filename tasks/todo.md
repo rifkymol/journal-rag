@@ -1,17 +1,23 @@
-# Backend Error Log Investigation
+# Project Run Investigation
 
-- [x] Inspect the latest backend error log.
-- [x] Verify the current `SystemMessage` source code.
-- [x] Reproduce `generate()` with the edited code.
-- [ ] Restart backend from a single fresh process.
-- [ ] Verify the backend no longer serves stale code.
+- [x] Confirm permission to reuse the existing `.env` OpenAI API key for verification.
+- [x] Inspect current backend logs and process state.
+- [x] Run backend startup check.
+- [x] Run frontend startup/build check.
+- [x] Identify and fix local code/config issues if found.
+- [x] Verify the app starts cleanly.
 
 ## Findings
 
-- The previous typo was changed from `context=` to `content=`.
-- Directly invoking `generate()` with a dummy LLM succeeds with the edited file.
-- The remaining error is consistent with a stale uvicorn process still running old imported code.
+- Current backend logs are old and show a clean startup plus successful `/graph-chat` requests.
+- Fresh backend startup initially failed because `OpenAIEmbeddings` was created before `.env` was loaded.
+- `app/vector_store.py` now loads `.env` before constructing `OpenAIEmbeddings`.
 
 ## Review
 
-- Pending restart and verification.
+- Backend command starts successfully on `http://127.0.0.1:8000`.
+- Backend `/health` returns `{"status":"ok"}`.
+- Backend `/chat` returns `{"answer":"ok"}` for a smoke test.
+- Frontend `npm run build` passes.
+- Frontend starts successfully on `http://127.0.0.1:3000`.
+- Frontend `/chat` proxy returns `{"answer":"ok"}` for a smoke test.

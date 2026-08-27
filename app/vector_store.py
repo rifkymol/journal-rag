@@ -1,5 +1,8 @@
 from langchain_openai import OpenAIEmbeddings
 from langchain_chroma import Chroma
+from dotenv import load_dotenv
+
+load_dotenv()
 
 embeddings = OpenAIEmbeddings(
     model="text-embedding-3-small"
@@ -30,11 +33,30 @@ def load_vector_store():
 
     return vectore_store
 
-def create_retriever(vector_store):
+def create_retriever(vector_store, document_id: str):
     retriever = vector_store.as_retriever(
         search_kwargs={
-            "k": 3
+            "k": 3,
+            "filter": {
+                "document_id": document_id
+            }
         }
     )
 
     return retriever
+
+def delete_document(document_id: str):
+    vector_store = load_vector_store()
+    
+    result = vector_store.get(
+        where={
+            "document_id": document_id
+        }
+    )
+
+    ids = result["ids"]
+
+    if ids:
+        vector_store.delete(
+            ids=ids
+        )
