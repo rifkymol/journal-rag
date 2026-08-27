@@ -23,11 +23,10 @@ class RAGState(TypedDict):
     document_id: str
     search_query: str
     context: str
-    source: list[dict]
+    sources: list[dict]
 
 
 vector_store = load_vector_store()
-retriever = create_retriever(vector_store)
 
 
 def retrieve(state: RAGState):

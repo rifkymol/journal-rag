@@ -26,7 +26,17 @@ app = FastAPI()
 class ChatRequest(BaseModel):
     message: str
     thread_id: str
-    document_id: str
+    document_id: str | None = None
+
+
+def require_document_id(request: ChatRequest) -> str:
+    if request.document_id is None:
+        raise HTTPException(
+            status_code=400,
+            detail="document_id is required for this endpoint"
+        )
+
+    return request.document_id
 
 
 @app.get("/health")
@@ -95,34 +105,11 @@ def test_chunks():
 #         ]
 #     }
 
-# @app.get("/test-retriever")
-# def test_retriever():
-    documents = load_pdf("data/journals/sample.pdf")
-
-    chunks = split_documents(documents)
-
-    vectore_store = create_vector_store(chunks)
-
-    retriever = create_retriever(vectore_store)
-
-    results = retriever.invoke(
-        "What is the main objective of this research?"
-    )
-
-    return {
-        "results": [
-            {
-                "content": document.page_content,
-                "metadata": document.metadata
-            }
-            for document in results
-        ]
-    }
-
 @app.post("/rag-chat")
 def test_rag(request: ChatRequest):
+    document_id = require_document_id(request)
     vectore_store = load_vector_store()
-    retriever = create_retriever(vectore_store)
+    retriever = create_retriever(vectore_store, document_id)
 
     results = ask_rag(
         request.message, 
@@ -174,6 +161,7 @@ async def upload_journal(
 
 @app.post("/graph-chat")
 def graph_chat(request: ChatRequest):
+    document_id = require_document_id(request)
     config = {
         "configurable": {
             "thread_id": request.thread_id
@@ -185,9 +173,10 @@ def graph_chat(request: ChatRequest):
             "messages": [
                 HumanMessage(content=request.message)
             ],
+            "document_id": document_id,
             "search_query": "",
             "context": "",
-            "source": []
+            "sources": []
         },
         config=config
     )
@@ -199,6 +188,7 @@ def graph_chat(request: ChatRequest):
 
 @app.post("/stream-chat")
 async def stream_chat(request: ChatRequest):
+    document_id = require_document_id(request)
     config = {
         "configurable": {
             "thread_id": request.thread_id
@@ -214,8 +204,10 @@ async def stream_chat(request: ChatRequest):
                         "content": request.message
                     }
                 ],
+                "document_id": document_id,
                 "search_query": "",
-                "context": ""
+                "context": "",
+                "sources": []
             },
             config=config,
             version="v2"
