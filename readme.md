@@ -9,7 +9,6 @@ POST /chat
 GET /journals
 POST /journals
 DELETE /journals/{document_id}
-POST /journals/search
 ```
 
 ## Spec
@@ -21,7 +20,7 @@ POST /journals/search
 - Backend port: `8000`
 - Frontend port: `3000`
 - Frontend proxy: `/chat` is forwarded to `http://127.0.0.1:8000/chat`
-- Journal reference search: Tavily
+- Related scholarly reference lookup: Tavily through LangGraph
 
 ## API Spec
 
@@ -43,8 +42,19 @@ SSE stream with message events and a final done event.
 
 If the message asks for journal references, research papers, academic papers,
 related studies, literature recommendations, or Indonesian equivalents like
-`referensi jurnal`, `/chat` returns up to 5 public web journal references.
+`referensi jurnal`, `/chat` returns up to 5 related scholarly references from
+trusted scholarly domains.
 Otherwise, `/chat` answers from the selected uploaded journal.
+
+Trusted lookup domains:
+
+```text
+arxiv.org
+pubmed.ncbi.nlm.nih.gov
+semanticscholar.org
+aclanthology.org
+frontiersin.org
+```
 
 ## Environment
 

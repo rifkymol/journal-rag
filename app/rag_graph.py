@@ -1,7 +1,7 @@
-from typing import Annotated, TypedDict
+from typing import Annotated, Literal, TypedDict
 from pathlib import Path
 
-from langchain_core.messages import BaseMessage
+from langchain_core.messages import AIMessage, BaseMessage
 from langgraph.graph import StateGraph, START, END
 from langgraph.graph.message import add_messages
 from langgraph.checkpoint.memory import InMemorySaver
@@ -15,16 +15,85 @@ from app.vector_store import (
     load_vector_store,
     create_retriever
 )
+from app.journal_lookup import (
+    format_scholarly_references,
+    is_journal_lookup_request,
+    lookup_related_scholarly_references,
+)
+
+RequestRoute = Literal[
+    "journal_lookup",
+    "rag",
+    "missing_document",
+]
 
 class RAGState(TypedDict):
     messages: Annotated[list[BaseMessage], add_messages]
-    document_id: str
+    document_id: str | None
+    request_route: RequestRoute
     search_query: str
     context: str
     sources: list[dict]
 
 
 vector_store = load_vector_store()
+
+
+def route_request(state: RAGState):
+    latest_message = state["messages"][-1]
+    latest_content = str(latest_message.content)
+
+    if is_journal_lookup_request(latest_content):
+        return {
+            "request_route": "journal_lookup"
+        }
+
+    if state.get("document_id") is None:
+        return {
+            "request_route": "missing_document"
+        }
+
+    return {
+        "request_route": "rag"
+    }
+
+
+def select_route(state: RAGState):
+    return state["request_route"]
+
+
+def missing_document(state: RAGState):
+    return {
+        "messages": [
+            AIMessage(
+                content="Please select or upload a journal before asking about its content."
+            )
+        ]
+    }
+
+
+def lookup_journal_references(state: RAGState):
+    latest_message = state["messages"][-1]
+    latest_content = str(latest_message.content)
+
+    try:
+        references = lookup_related_scholarly_references(
+            latest_content
+        )
+        answer = format_scholarly_references(references)
+    except Exception:
+        answer = (
+            "I could not look up related scholarly references. "
+            "Please check that TAVILY_API_KEY is configured."
+        )
+
+    return {
+        "messages": [
+            AIMessage(
+                content=answer
+            )
+        ]
+    }
 
 
 def retrieve(state: RAGState):
@@ -108,11 +177,25 @@ Do not answer the question
 
 graph_builder = StateGraph(RAGState)
 
+graph_builder.add_node("route_request", route_request)
+graph_builder.add_node("missing_document", missing_document)
+graph_builder.add_node("lookup_journal_references", lookup_journal_references)
 graph_builder.add_node("rewrite_query", rewrite_query)
 graph_builder.add_node("retrieve", retrieve)
 graph_builder.add_node("generate", generate)
 
-graph_builder.add_edge(START, "rewrite_query")
+graph_builder.add_edge(START, "route_request")
+graph_builder.add_conditional_edges(
+    "route_request",
+    select_route,
+    {
+        "journal_lookup": "lookup_journal_references",
+        "rag": "rewrite_query",
+        "missing_document": "missing_document",
+    }
+)
+graph_builder.add_edge("lookup_journal_references", END)
+graph_builder.add_edge("missing_document", END)
 graph_builder.add_edge("rewrite_query", "retrieve")
 graph_builder.add_edge("retrieve", "generate")
 graph_builder.add_edge("generate",END)

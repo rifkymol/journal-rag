@@ -89,8 +89,7 @@ export default function Home() {
     [journals, selectedDocumentId],
   );
 
-  const canSend =
-    message.trim().length > 0 && Boolean(selectedDocumentId) && !isSending;
+  const canSend = message.trim().length > 0 && !isSending;
 
   useEffect(() => {
     void loadJournals();
@@ -224,10 +223,7 @@ export default function Home() {
     event.preventDefault();
 
     const userText = message.trim();
-    if (!userText || isSending || !selectedDocumentId) {
-      if (!selectedDocumentId) {
-        setError("Select or upload a journal first.");
-      }
+    if (!userText || isSending) {
       return;
     }
 
@@ -554,10 +550,10 @@ export default function Home() {
               placeholder={
                 selectedDocumentId
                   ? "Ask about the selected journal..."
-                  : "Select a journal first..."
+                  : "Ask for related scholarly references..."
               }
               rows={1}
-              disabled={!selectedDocumentId || isSending}
+              disabled={isSending}
               className="max-h-32 min-h-12 flex-1 resize-none rounded border border-[var(--line)] bg-white px-3 py-3 text-sm leading-5 outline-none transition focus:border-[var(--accent)] disabled:cursor-not-allowed disabled:bg-[var(--soft)]"
             />
             <button
