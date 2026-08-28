@@ -22,3 +22,9 @@
 - Render-style backend command with `--host 0.0.0.0 --port $PORT` started successfully.
 - `/health` returned `{"status":"ok"}`.
 - `frontend` `npm run build` passed.
+
+## Local Restart
+
+- Backend: from project root, run `.venv\Scripts\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8000`.
+- Frontend: from `frontend`, run `.\node_modules\.bin\next.cmd start -H 127.0.0.1 -p 3000`.
+- Open the app at `http://127.0.0.1:3000`.
