@@ -22,6 +22,18 @@ Create `.env.local` if the backend URL is different:
 NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:8000
 ```
 
+## Deploy To Vercel
+
+Set this environment variable in the Vercel project before deploying:
+
+```env
+NEXT_PUBLIC_API_BASE_URL=https://journal-rag.onrender.com
+```
+
+Use your actual public Render backend URL if it is different. Do not use
+`127.0.0.1` or `localhost` on Vercel because those point to Vercel itself, not
+your backend.
+
 ## Run
 
 Start the FastAPI backend first from the repository root:
