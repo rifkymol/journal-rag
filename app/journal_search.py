@@ -1,6 +1,5 @@
 from urllib.parse import urlparse
 
-from langchain_core.tools import tool
 from langchain_tavily import TavilySearch
 
 
@@ -40,17 +39,3 @@ def search_public_journals(query: str):
     return {
         "results": journals
     }
-
-
-@tool("search_public_journals")
-def search_public_journals_tool(query: str):
-    """
-    Search for public academic journal or research paper references.
-
-    Use this tool when the user asks for journal references,
-    research papers, academic papers, or related literature.
-
-    Returns up to 5 related journal references with title, source, and URL.
-    """
-
-    return search_public_journals(query)

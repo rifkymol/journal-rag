@@ -8,7 +8,6 @@ from app.rag_graph import rag_graph
 from app.vector_store import delete_document
 from app.journal_store import add_journal, load_journals, delete_journal_record
 from app.journal_search import search_public_journals
-from app.journal_import import import_public_journal
 
 JOURNAL_DIR = Path("data/journals")
 JOURNAL_DIR.mkdir(parents=True, exist_ok=True)
@@ -58,10 +57,6 @@ class ChatRequest(BaseModel):
 
 class JournalSearchRequest(BaseModel):
     query: str
-
-
-class JournalImportSearch(BaseModel):
-    url: str
 
 
 def is_journal_reference_request(message: str) -> bool:
@@ -264,28 +259,5 @@ def search_journals(request: JournalSearchRequest):
     return search_public_journals(
         request.query
     )
-
-# @app.post("/journals/import")
-# def import_journal(
-#     request: JournalImportSearch
-# ):
-#     try:
-#         result = import_public_journal(
-#             request.url
-#         )
-
-#         return result
-
-#     except ValueError as error:
-#         raise HTTPException(
-#             status_code=400,
-#             detail=str(error)
-#         )
-
-#     except Exception:
-#         raise HTTPException(
-#             status_code=500,
-#             detail="Failed to import journal"
-#         )
 
 

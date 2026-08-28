@@ -2,13 +2,14 @@
 
 Simple chat app with a FastAPI backend and a Next.js frontend.
 
-For now, the frontend only uses one API:
+Current backend APIs:
 
 ```text
 POST /chat
 GET /journals
 POST /journals
 DELETE /journals/{document_id}
+POST /journals/search
 ```
 
 ## Spec
@@ -99,14 +100,3 @@ cd frontend
 npm run lint
 npm run build
 ```
-
-## Extra Backend Endpoints
-
-These exist, but the frontend does not use them right now:
-
-- `POST /rag-chat`
-- `POST /graph-chat`
-- `POST /stream-chat`
-- `POST /ingest`
-- `GET /test-pdf`
-- `GET /test-chunks`
