@@ -9,6 +9,8 @@ from app.rag_graph import rag_graph
 from app.ingestion import ingest_pdf
 from app.vector_store import delete_document
 from app.journal_store import add_journal, load_journals, delete_journal_record
+from app.journal_search import search_public_journals
+from app.journal_import import import_public_journal
 
 JOURNAL_DIR = Path("data/journals")
 JOURNAL_DIR.mkdir(parents=True, exist_ok=True)
@@ -19,6 +21,12 @@ class ChatRequest(BaseModel):
     message: str
     thread_id: str
     document_id: str | None = None
+
+class JournalSearchRequest(BaseModel):
+    query: str
+
+class JournalImportSearch(BaseModel):
+    url: str
 
 
 def require_document_id(request: ChatRequest) -> str:
@@ -156,3 +164,37 @@ def delete_journal(document_id: str):
         "message": "Journal Deleted",
         "document_id": document_id
     }
+
+@app.post("/journals/search")
+def search_journals(request: JournalSearchRequest):
+    results = search_public_journals(
+        request.query
+    )
+
+    return results
+
+@app.post("/journals/import")
+def import_journal(
+    request: JournalImportSearch
+):
+    try:
+        result = import_public_journal(
+            request.url
+        )
+
+        return result
+
+    except ValueError as error:
+        raise HTTPException(
+            status_code=400,
+            detail=str(error)
+        )
+
+    except Exception:
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to import journal"
+        )
+
+
+    
