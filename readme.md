@@ -6,6 +6,9 @@ For now, the frontend only uses one API:
 
 ```text
 POST /chat
+GET /journals
+POST /journals
+DELETE /journals/{document_id}
 ```
 
 ## Spec
@@ -17,6 +20,7 @@ POST /chat
 - Backend port: `8000`
 - Frontend port: `3000`
 - Frontend proxy: `/chat` is forwarded to `http://127.0.0.1:8000/chat`
+- Journal reference search: Tavily
 
 ## API Spec
 
@@ -25,17 +29,21 @@ Request:
 ```json
 {
   "message": "Hello",
-  "thread_id": "local-session-id"
+  "thread_id": "local-session-id",
+  "document_id": "selected-document-id"
 }
 ```
 
 Response:
 
-```json
-{
-  "answer": "Hello! How can I help?"
-}
+```text
+SSE stream with message events and a final done event.
 ```
+
+If the message asks for journal references, research papers, academic papers,
+related studies, literature recommendations, or Indonesian equivalents like
+`referensi jurnal`, `/chat` returns up to 5 public web journal references.
+Otherwise, `/chat` answers from the selected uploaded journal.
 
 ## Environment
 
@@ -43,6 +51,7 @@ Create `.env` in the project root:
 
 ```env
 OPENAI_API_KEY=your_api_key_here
+TAVILY_API_KEY=your_tavily_api_key_here
 ```
 
 ## Run Backend

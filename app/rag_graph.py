@@ -1,12 +1,11 @@
 from typing import Annotated, TypedDict
 from pathlib import Path
 
-from langchain_core.messages import HumanMessage, AIMessage, BaseMessage
+from langchain_core.messages import BaseMessage
 from langgraph.graph import StateGraph, START, END
 from langgraph.graph.message import add_messages
 from langgraph.checkpoint.memory import InMemorySaver
 from langchain_core.messages import (
-    BaseMessage,
     SystemMessage,
 )
 
@@ -16,7 +15,6 @@ from app.vector_store import (
     load_vector_store,
     create_retriever
 )
-
 
 class RAGState(TypedDict):
     messages: Annotated[list[BaseMessage], add_messages]
