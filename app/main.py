@@ -7,11 +7,7 @@ from pathlib import Path
 from app.ingestion import ingest_pdf
 from app.rag_graph import rag_graph
 from app.ingestion import ingest_pdf
-from app.vector_store import (
-    load_vector_store,
-    create_retriever,
-    delete_document
-)
+from app.vector_store import delete_document
 from app.journal_store import add_journal, load_journals, delete_journal_record
 
 JOURNAL_DIR = Path("data/journals")
@@ -100,7 +96,12 @@ async def chat(request: ChatRequest):
             config=config,
             version="v2"
         ):
-            if event["event"] == "on_chat_model_stream":
+            metadata = event.get("metadata") or {}
+
+            if (
+                event["event"] == "on_chat_model_stream"
+                and metadata.get("langgraph_node") == "generate"
+            ):
                 chunk = event["data"]["chunk"]
 
                 if chunk.content:
