@@ -84,7 +84,7 @@ def lookup_journal_references(state: RAGState):
     except Exception:
         answer = (
             "I could not look up related scholarly references. "
-            "Please check that TAVILY_API_KEY is configured."
+            "Please check to the Administrator."
         )
 
     return {
