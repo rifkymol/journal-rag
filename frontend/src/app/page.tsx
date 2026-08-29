@@ -33,6 +33,8 @@ const starterMessages: Message[] = [
   },
 ];
 
+const MAX_JOURNALS = 3;
+
 function createId() {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
     return crypto.randomUUID();
@@ -54,6 +56,23 @@ function createThreadId() {
   const nextThreadId = createId();
   window.localStorage.setItem("journal-chat-thread-id", nextThreadId);
   return nextThreadId;
+}
+
+function createSessionId() {
+  if (typeof window === "undefined") {
+    return "";
+  }
+
+  const storedSessionId = window.localStorage.getItem("journal-session-id");
+
+  if (storedSessionId) {
+    return storedSessionId;
+  }
+
+  const nextSessionId = createId();
+
+  window.localStorage.setItem("journal-session-id", nextSessionId);
+  return nextSessionId;
 }
 
 async function readApiError(response: Response, fallback: string) {
@@ -79,6 +98,7 @@ export default function Home() {
   const [deletingId, setDeletingId] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [error, setError] = useState("");
+  const [sessionId, setSessionId] = useState("");
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
@@ -89,11 +109,22 @@ export default function Home() {
     [journals, selectedDocumentId],
   );
 
-  const canSend = message.trim().length > 0 && !isSending;
+  const hasReachedJournalLimit = journals.length >= MAX_JOURNALS;
 
   useEffect(() => {
-    void loadJournals();
+    setSessionId(
+      createSessionId()
+    );
   }, []);
+
+  const canSend = message.trim().length > 0 && Boolean(sessionId) && !isSending;
+
+  useEffect(() => {
+    if (!sessionId) {
+      return;
+    }
+    void loadJournals();
+  }, [sessionId]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -104,7 +135,12 @@ export default function Home() {
     setError("");
 
     try {
-      const response = await fetch("/journals");
+      const response = await fetch("/journals",{
+        headers: {
+          "X-Session-ID": sessionId,
+        },
+      });
+
       if (!response.ok) {
         throw new Error(await readApiError(response, "Unable to load journals."));
       }
@@ -134,6 +170,19 @@ export default function Home() {
   }
 
   async function handleUpload(file: File) {
+    if (!sessionId) {
+      setError("Session is still loading. Please try again.");
+      return;
+    }
+
+    if (hasReachedJournalLimit) {
+      setError("You can upload a maximum of 3 PDFs. Delete one PDF before uploading another.");
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+      return;
+    }
+
     if (file.type !== "application/pdf") {
       setError("Only PDF files are allowed.");
       return;
@@ -148,6 +197,9 @@ export default function Home() {
     try {
       const response = await fetch("/journals", {
         method: "POST",
+        headers: {
+          "X-Session-ID": sessionId,
+        },
         body: formData,
       });
 
@@ -179,6 +231,11 @@ export default function Home() {
   }
 
   async function handleDelete(journal: Journal) {
+    if (!sessionId) {
+      setError("Session is still loading. Please try again.");
+      return;
+    }
+
     const confirmed = window.confirm(`Delete ${journal.filename}?`);
     if (!confirmed) {
       return;
@@ -190,6 +247,9 @@ export default function Home() {
     try {
       const response = await fetch(`/journals/${journal.document_id}`, {
         method: "DELETE",
+        headers: {
+          "X-Session-ID": sessionId,
+        },
       });
 
       if (!response.ok) {
@@ -227,6 +287,11 @@ export default function Home() {
       return;
     }
 
+    if (!sessionId) {
+      setError("Session is still loading. Please try again.");
+      return;
+    }
+
     const currentThreadId = threadId || createThreadId();
     setThreadId(currentThreadId);
 
@@ -255,6 +320,7 @@ export default function Home() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          "X-Session-ID": sessionId,
         },
         body: JSON.stringify({
           message: userText,
@@ -359,10 +425,14 @@ export default function Home() {
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
-            disabled={isUploading}
+            disabled={isUploading || hasReachedJournalLimit || !sessionId}
             className="flex h-10 w-10 items-center justify-center rounded border border-[var(--line)] bg-white text-[var(--muted)] transition hover:border-[var(--accent)] hover:text-[var(--ink)] disabled:cursor-not-allowed disabled:opacity-60"
             aria-label="Upload journal"
-            title="Upload journal"
+            title={
+              hasReachedJournalLimit
+                ? "Upload limit reached"
+                : "Upload journal"
+            }
           >
             {isUploading ? (
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -386,7 +456,8 @@ export default function Home() {
 
         <div className="flex shrink-0 items-center justify-between border-b border-[var(--line)] px-4 py-3">
           <span className="text-sm text-[var(--muted)]">
-            {journals.length} {journals.length === 1 ? "journal" : "journals"}
+            {journals.length}/{MAX_JOURNALS}{" "}
+            {journals.length === 1 ? "journal" : "journals"}
           </span>
           <button
             type="button"
@@ -401,6 +472,12 @@ export default function Home() {
             />
           </button>
         </div>
+
+        {hasReachedJournalLimit && (
+          <div className="border-b border-[var(--warning-line)] bg-[var(--warning)] px-4 py-3 text-sm text-[var(--warning-ink)]">
+            Upload limit reached. Delete one PDF before uploading another.
+          </div>
+        )}
 
         <div className="min-h-0 flex-1 overflow-y-auto p-3">
           {isLoadingJournals && journals.length === 0 ? (

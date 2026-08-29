@@ -5,13 +5,18 @@ from app.text_splitter import split_documents
 from app.vector_store import create_vector_store
 
 
-def ingest_pdf(file_path: str):
+def ingest_pdf(
+        file_path: str,
+        session_id: str
+    ):
+
     document_id = str(uuid4())
 
     documents = load_pdf(file_path)
 
     for document in documents:
         document.metadata["document_id"] = document_id
+        document.metadata["session_id"] = session_id
 
     chunks = split_documents(documents)
 
