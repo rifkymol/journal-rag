@@ -1,4 +1,5 @@
 from contextlib import nullcontext
+import json
 
 from langchain_core.messages import AIMessage, HumanMessage
 
@@ -9,6 +10,7 @@ from app.observability import (
     update_observation,
 )
 from app.rag_graph import rag_graph
+from app.source_utils import compact_sources
 
 
 FINAL_MESSAGE_NODES = {
@@ -135,6 +137,14 @@ async def stream_chat_response(
                     "sources": sources,
                 },
             )
+
+    compacted_sources = compact_sources(sources)
+
+    if compacted_sources:
+        yield {
+            "event": "sources",
+            "data": json.dumps(compacted_sources)
+        }
 
     yield {
         "event": "done",

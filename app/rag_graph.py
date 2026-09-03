@@ -213,8 +213,6 @@ def generate(state: RAGState):
         for source in state.get("sources", [])
     )
 
-    print(source_lines)
-
     if not source_lines:
         source_lines = "- No retrieved sources available"
 
@@ -229,7 +227,8 @@ Important rules:
 - Do not say the full document was not uploaded.
 - Answer only from the retrieved context.
 - If the retrieved context is not enough to answer, say the answer was not found in the retrieved context.
-- End the answer with a short "Sources" section using the retrieved sources.
+- Do not add inline source citations after every sentence.
+- Do not write a "Sources" section in the answer text. The interface will display sources separately.
 
 Retrieved context:
 {state["context"]}

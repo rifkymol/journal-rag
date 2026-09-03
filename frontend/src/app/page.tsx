@@ -23,6 +23,13 @@ type Message = {
   id: string;
   role: "user" | "assistant";
   content: string;
+  sources?: SourceReference[];
+};
+
+type SourceReference = {
+  source: string;
+  pages: number[];
+  page_label: string;
 };
 
 const starterMessages: Message[] = [
@@ -85,6 +92,45 @@ async function readApiError(response: Response, fallback: string) {
 
   const text = await response.text().catch(() => "");
   return text || fallback;
+}
+
+function normalizeSources(value: unknown): SourceReference[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .map((item) => {
+      if (!item || typeof item !== "object") {
+        return null;
+      }
+
+      const sourceItem = item as Partial<SourceReference>;
+      if (
+        typeof sourceItem.source !== "string" ||
+        typeof sourceItem.page_label !== "string" ||
+        !Array.isArray(sourceItem.pages)
+      ) {
+        return null;
+      }
+
+      return {
+        source: sourceItem.source,
+        pages: sourceItem.pages.filter(
+          (page): page is number => typeof page === "number",
+        ),
+        page_label: sourceItem.page_label,
+      };
+    })
+    .filter((item): item is SourceReference => item !== null);
+}
+
+function formatSourcePages(source: SourceReference) {
+  if (!source.page_label) {
+    return "Pages unavailable";
+  }
+
+  return `${source.pages.length === 1 ? "p." : "pp."} ${source.page_label}`;
 }
 
 export default function Home() {
@@ -355,6 +401,12 @@ export default function Home() {
           const boundaryIndex = boundaryMatch.index;
           const eventBlock = buffer.slice(0, boundaryIndex);
           buffer = buffer.slice(boundaryIndex + boundaryMatch[0].length);
+          const eventName =
+            eventBlock
+              .split(/\r?\n/)
+              .find((line) => line.startsWith("event:"))
+              ?.slice(6)
+              .trim() ?? "message";
 
           const data = eventBlock
             .split(/\r?\n/)
@@ -365,7 +417,25 @@ export default function Home() {
             })
             .join("\n");
 
-          if (data && data !== "[DONE]") {
+          if (eventName === "sources" && data) {
+            try {
+              const nextSources = normalizeSources(
+                JSON.parse(data)
+              );
+
+              setMessages((current) =>
+                current.map((item) =>
+                  item.id === assistantMessageId
+                    ? { ...item, sources: nextSources }
+                    : item,
+                ),
+              );
+            } catch {
+              // Ignore malformed source metadata; the streamed answer is still useful.
+            }
+          }
+
+          if (eventName === "message" && data && data !== "[DONE]") {
             assistantText += data;
             setMessages((current) =>
               current.map((item) =>
@@ -585,9 +655,34 @@ export default function Home() {
                 }`}
               >
                 {item.content ? (
-                  <p className="whitespace-pre-wrap break-words">
-                    {item.content}
-                  </p>
+                  <>
+                    <p className="whitespace-pre-wrap break-words">
+                      {item.content}
+                    </p>
+
+                    {item.role === "assistant" && item.sources?.length ? (
+                      <div className="mt-3 border-t border-[var(--line)] pt-3">
+                        <p className="text-xs font-semibold uppercase tracking-normal text-[var(--muted)]">
+                          Sources
+                        </p>
+                        <div className="mt-2 space-y-2">
+                          {item.sources.map((source) => (
+                            <div
+                              key={`${source.source}-${source.page_label}`}
+                              className="rounded border border-[var(--line)] bg-[var(--soft)] px-3 py-2"
+                            >
+                              <p className="break-words text-xs font-medium text-[var(--ink)]">
+                                {source.source}
+                              </p>
+                              <p className="mt-1 text-xs text-[var(--muted)]">
+                                {formatSourcePages(source)}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
+                  </>
                 ) : (
                   <Loader2 className="h-4 w-4 animate-spin text-[var(--muted)]" />
                 )}
