@@ -5,6 +5,7 @@ from pathlib import Path
 
 from app.chat_stream import stream_chat_response
 from app.ingestion import ingest_pdf
+from app.observability import flush_langfuse
 from app.vector_store import delete_document
 from app.journal_store import (
     add_journal,
@@ -49,6 +50,11 @@ def health_check():
     return {
         "status" : "ok"
     }
+
+
+@app.on_event("shutdown")
+def shutdown_langfuse():
+    flush_langfuse()
 
 @app.post("/journals")
 async def upload_journal(
@@ -122,6 +128,7 @@ async def chat(
             request.message,
             request.thread_id,
             request.document_id,
+            session_id,
         )
     )
 

@@ -21,6 +21,7 @@ DELETE /journals/{document_id}
 - Frontend port: `3000`
 - Frontend proxy: `/chat` is forwarded to `http://127.0.0.1:8000/chat`
 - Related scholarly reference lookup: Tavily through LangGraph
+- Tracing: Langfuse Python SDK with LangChain/LangGraph callbacks
 
 ## API Spec
 
@@ -63,7 +64,15 @@ Create `.env` in the project root:
 ```env
 OPENAI_API_KEY=your_api_key_here
 TAVILY_API_KEY=your_tavily_api_key_here
+LANGFUSE_PUBLIC_KEY=your_langfuse_public_key_here
+LANGFUSE_SECRET_KEY=your_langfuse_secret_key_here
+LANGFUSE_BASE_URL=https://cloud.langfuse.com
+LANGFUSE_TRACING_ENVIRONMENT=development
 ```
+
+Langfuse traces are created for `/chat` requests. Each trace uses the session
+header as the Langfuse session id and includes nested observations for the
+LangGraph run, retrieval, query rewriting, and response generation.
 
 ## Run Backend
 
