@@ -9,6 +9,11 @@ POST /chat
 GET /journals
 POST /journals
 DELETE /journals/{document_id}
+GET /sources
+POST /sources/pdf
+POST /sources/text
+GET /sources/{source_id}/preview?page=1
+DELETE /sources/{source_id}
 ```
 
 ## Spec
@@ -25,7 +30,7 @@ DELETE /journals/{document_id}
 
 ## API Spec
 
-Request:
+Legacy request:
 
 ```json
 {
@@ -35,11 +40,26 @@ Request:
 }
 ```
 
+Study request:
+
+```json
+{
+  "message": "Compare the methods in these papers",
+  "thread_id": "local-session-id",
+  "document_ids": ["source-a", "source-b"],
+  "mode": "compare",
+  "language": "auto"
+}
+```
+
 Response:
 
 ```text
-SSE stream with message events and a final done event.
+SSE stream with status, message, sources, artifact, and final done events.
 ```
+
+Supported study modes are `auto`, `explain`, `summarize`, `compare`, `quiz`,
+`flashcards`, `citations`, and `web_references`.
 
 If the message asks for journal references, research papers, academic papers,
 related studies, literature recommendations, or Indonesian equivalents like
@@ -118,4 +138,11 @@ Frontend:
 cd frontend
 npm run lint
 npm run build
+```
+
+Development tests:
+
+```powershell
+.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
+.venv\Scripts\python.exe -m pytest -q
 ```
