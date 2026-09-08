@@ -16,6 +16,7 @@ from app.source_utils import compact_sources
 FINAL_MESSAGE_NODES = {
     "lookup_journal_references",
     "missing_document",
+    "study_artifact",
 }
 
 
@@ -37,12 +38,47 @@ def get_message_content(output: dict) -> str:
 async def stream_chat_response(
     message: str,
     thread_id: str,
-    document_id: str | None,
+    document_ids: list[str] | str,
     session_id: str,
+    mode: str = "auto",
+    language: str = "auto",
 ):
+    try:
+        async for event in _stream_chat_response(
+            message,
+            thread_id,
+            document_ids,
+            session_id,
+            mode,
+            language,
+        ):
+            yield event
+    except Exception:
+        yield {
+            "event": "error",
+            "data": "The study assistant could not complete this request.",
+        }
+        yield {
+            "event": "done",
+            "data": "[DONE]",
+        }
+
+
+async def _stream_chat_response(
+    message: str,
+    thread_id: str,
+    document_ids: list[str] | str,
+    session_id: str,
+    mode: str = "auto",
+    language: str = "auto",
+):
+    if isinstance(document_ids, str):
+        document_ids = [document_ids] if document_ids else []
+
     langfuse = get_langfuse_client()
     answer_chunks: list[str] = []
     sources: list[dict] = []
+    artifact: dict | None = None
 
     config = {
         "configurable": {
@@ -56,7 +92,9 @@ async def stream_chat_response(
                 "langgraph",
             ],
             "endpoint": "/chat",
-            "document_id": document_id,
+            "document_ids": document_ids,
+            "mode": mode,
+            "language": language,
         },
         "run_name": "run-chat-graph",
     }
@@ -67,7 +105,7 @@ async def stream_chat_response(
             name="chat-response",
             input={
                 "message": message,
-                "document_id": document_id,
+                "document_ids": document_ids,
             },
         )
         if langfuse is not None
@@ -75,11 +113,19 @@ async def stream_chat_response(
     )
 
     with root_observation as root_span:
-        with propagate_chat_attributes(session_id, document_id):
+        with propagate_chat_attributes(
+            session_id,
+            document_ids[0] if document_ids else None,
+        ):
             langfuse_handler = create_langfuse_handler()
 
             if langfuse_handler is not None:
                 config["callbacks"] = [langfuse_handler]
+
+            yield {
+                "event": "status",
+                "data": "Thinking through your sources...",
+            }
 
             async for event in rag_graph.astream_events(
                 {
@@ -88,11 +134,14 @@ async def stream_chat_response(
                             content=message
                         )
                     ],
-                    "document_id": document_id,
+                    "document_ids": document_ids,
+                    "mode": mode,
+                    "language": language,
                     "request_route": "rag",
                     "search_query": "",
                     "context": "",
-                    "sources": []
+                    "sources": [],
+                    "artifact": None,
                 },
                 config=config,
                 version="v2"
@@ -103,6 +152,9 @@ async def stream_chat_response(
                 if event["event"] == "on_chain_end" and node_name == "retrieve":
                     retrieve_output = event["data"].get("output", {})
                     sources = retrieve_output.get("sources", [])
+
+                if event["event"] == "on_chain_end" and node_name == "study_artifact":
+                    artifact = event["data"].get("output", {}).get("artifact")
 
                 if (
                     event["event"] == "on_chat_model_stream"
@@ -135,6 +187,7 @@ async def stream_chat_response(
                 output={
                     "answer": "".join(answer_chunks),
                     "sources": sources,
+                    "artifact_type": artifact.get("type") if artifact else None,
                 },
             )
 
@@ -144,6 +197,12 @@ async def stream_chat_response(
         yield {
             "event": "sources",
             "data": json.dumps(compacted_sources)
+        }
+
+    if artifact:
+        yield {
+            "event": "artifact",
+            "data": json.dumps(artifact),
         }
 
     yield {
