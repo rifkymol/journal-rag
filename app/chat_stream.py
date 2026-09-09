@@ -43,25 +43,29 @@ async def stream_chat_response(
     mode: str = "auto",
     language: str = "auto",
 ):
-    try:
-        async for event in _stream_chat_response(
-            message,
-            thread_id,
-            document_ids,
-            session_id,
-            mode,
-            language,
-        ):
-            yield event
-    except Exception:
-        yield {
-            "event": "error",
-            "data": "The study assistant could not complete this request.",
-        }
-        yield {
-            "event": "done",
-            "data": "[DONE]",
-        }
+import asyncio
+
+try:
+    async for event in _stream_chat_response(
+        message,
+        thread_id,
+        document_ids,
+        session_id,
+        mode,
+        language,
+    ):
+        yield event
+except asyncio.CancelledError:
+    raise
+except Exception:
+    yield {
+        "event": "error",
+        "data": "The study assistant could not complete this request.",
+    }
+    yield {
+        "event": "done",
+        "data": "[DONE]",
+    }
 
 
 async def _stream_chat_response(
