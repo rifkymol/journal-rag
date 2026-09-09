@@ -656,12 +656,14 @@ function toggleDocumentSelection(documentId: string) {
   });
 }
 
-  function saveArtifact(artifact: StudyArtifact) {
-    setSavedArtifacts((current) => [
-      artifact,
-      ...current.filter((item) => item.title !== artifact.title),
-    ]);
-  }
+function saveArtifact(artifact: StudyArtifact) {
+  setSavedArtifacts((current) => [
+    artifact,
+    ...current.filter(
+      (item) => !(item.title === artifact.title && item.type === artifact.type),
+    ),
+  ]);
+}
 
   function exportArtifact(artifact: StudyArtifact) {
     const blob = new Blob([JSON.stringify(artifact, null, 2)], {
