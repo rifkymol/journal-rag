@@ -242,3 +242,5 @@
 - FastAPI smoke test passed for `/health` and session-scoped `/sources`.
 - Only study-copilot backend, frontend, documentation, dependency, test, and task files changed.
 - Remaining warnings are upstream deprecations for `langchain-community` PDF loading and FastAPI `on_event`.
+- Fixed the chat SSE retrieve-event type mismatch that caused the generic study-assistant error.
+- Direct graph-path smoke test now returns streamed messages, sources, and `done`.
