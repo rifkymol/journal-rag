@@ -641,20 +641,20 @@ export default function Home() {
     setError("");
   }
 
-  function toggleDocumentSelection(documentId: string) {
-    setSelectedDocumentIds((current) => {
-      if (current.includes(documentId)) {
-        const next = current.filter((id) => id !== documentId);
-        if (selectedDocumentId === documentId) {
-          setSelectedDocumentId(next[0] ?? "");
-        }
-        return next;
-      }
+function toggleDocumentSelection(documentId: string) {
+  setSelectedDocumentIds((current) => {
+    if (current.includes(documentId)) {
+      const next = current.filter((id) => id !== documentId);
+      setSelectedDocumentId((currentPrimary) =>
+        currentPrimary === documentId ? next[0] ?? "" : currentPrimary,
+      );
+      return next;
+    }
 
-      setSelectedDocumentId((currentPrimary) => currentPrimary || documentId);
-      return [...current, documentId];
-    });
-  }
+    setSelectedDocumentId((currentPrimary) => currentPrimary || documentId);
+    return [...current, documentId];
+  });
+}
 
   function saveArtifact(artifact: StudyArtifact) {
     setSavedArtifacts((current) => [
