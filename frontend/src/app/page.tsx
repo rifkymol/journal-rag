@@ -1,8 +1,9 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Bot,
+  ClipboardPaste,
   FileText,
   Loader2,
   RefreshCw,
@@ -11,10 +12,26 @@ import {
   Upload,
   User,
 } from "lucide-react";
+import { ArtifactCard, StudyArtifact } from "./components/ArtifactCard";
+import { StudyModeToolbar } from "./components/StudyModeToolbar";
+import { readWorkspace, writeWorkspace } from "./workspaceStorage";
+
+type ChatMode =
+  | "auto"
+  | "explain"
+  | "summarize"
+  | "compare"
+  | "quiz"
+  | "flashcards"
+  | "citations";
+type Language = "auto" | "en" | "id";
 
 type Journal = {
   document_id: string;
-  filename: string;
+  source_id?: string;
+  source_type?: "pdf" | "text";
+  title?: string;
+  filename: string | null;
   pages: number;
   chunks: number;
 };
@@ -24,6 +41,7 @@ type Message = {
   role: "user" | "assistant";
   content: string;
   sources?: SourceReference[];
+  artifact?: StudyArtifact;
 };
 
 type SourceReference = {
@@ -136,6 +154,7 @@ function formatSourcePages(source: SourceReference) {
 export default function Home() {
   const [journals, setJournals] = useState<Journal[]>([]);
   const [selectedDocumentId, setSelectedDocumentId] = useState("");
+  const [selectedDocumentIds, setSelectedDocumentIds] = useState<string[]>([]);
   const [messages, setMessages] = useState<Message[]>(starterMessages);
   const [message, setMessage] = useState("");
   const [threadId, setThreadId] = useState(() => createThreadId());
@@ -145,6 +164,13 @@ export default function Home() {
   const [isSending, setIsSending] = useState(false);
   const [error, setError] = useState("");
   const [sessionId, setSessionId] = useState("");
+  const [mode, setMode] = useState<ChatMode>("auto");
+  const [language, setLanguage] = useState<Language>("auto");
+  const [isTextSourceOpen, setIsTextSourceOpen] = useState(false);
+  const [textTitle, setTextTitle] = useState("");
+  const [textContent, setTextContent] = useState("");
+  const [savedArtifacts, setSavedArtifacts] = useState<StudyArtifact[]>([]);
+  const hasLoadedWorkspace = useRef(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
@@ -158,30 +184,65 @@ export default function Home() {
   const hasReachedJournalLimit = journals.length >= MAX_JOURNALS;
 
   useEffect(() => {
-    setSessionId(
-      createSessionId()
-    );
+    const frame = window.requestAnimationFrame(() => {
+      setSessionId(createSessionId());
+    });
+    return () => window.cancelAnimationFrame(frame);
   }, []);
-
-  const canSend = message.trim().length > 0 && Boolean(sessionId) && !isSending;
 
   useEffect(() => {
     if (!sessionId) {
       return;
     }
-    void loadJournals();
+
+    hasLoadedWorkspace.current = false;
+    void readWorkspace<{
+      messages: Message[];
+      savedArtifacts: StudyArtifact[];
+      selectedDocumentIds: string[];
+      mode: ChatMode;
+      language: Language;
+    }>(`workspace:${sessionId}`).then((workspace) => {
+      if (workspace) {
+        setMessages(workspace.messages?.length ? workspace.messages : starterMessages);
+        setSavedArtifacts(workspace.savedArtifacts ?? []);
+        setSelectedDocumentIds(workspace.selectedDocumentIds ?? []);
+        setSelectedDocumentId(workspace.selectedDocumentIds?.[0] ?? "");
+        setMode(workspace.mode ?? "auto");
+        setLanguage(workspace.language ?? "auto");
+      }
+      hasLoadedWorkspace.current = true;
+    }).catch(() => {
+      hasLoadedWorkspace.current = true;
+    });
   }, [sessionId]);
+
+  useEffect(() => {
+    if (!sessionId || !hasLoadedWorkspace.current) {
+      return;
+    }
+
+    void writeWorkspace(`workspace:${sessionId}`, {
+      messages,
+      savedArtifacts,
+      selectedDocumentIds,
+      mode,
+      language,
+    });
+  }, [sessionId, messages, savedArtifacts, selectedDocumentIds, mode, language]);
+
+  const canSend = message.trim().length > 0 && Boolean(sessionId) && !isSending;
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isSending]);
 
-  async function loadJournals() {
+  const loadJournals = useCallback(async () => {
     setIsLoadingJournals(true);
     setError("");
 
     try {
-      const response = await fetch("/journals",{
+       const response = await fetch("/sources",{
         headers: {
           "X-Session-ID": sessionId,
         },
@@ -192,9 +253,9 @@ export default function Home() {
       }
 
       const data = await response.json();
-      const nextJournals: Journal[] = Array.isArray(data?.journals)
-        ? data.journals
-        : [];
+       const nextJournals: Journal[] = Array.isArray(data?.sources)
+         ? data.sources
+         : [];
 
       setJournals(nextJournals);
       setSelectedDocumentId((current) => {
@@ -202,8 +263,18 @@ export default function Home() {
           return current;
         }
 
-        return nextJournals[0]?.document_id ?? "";
-      });
+         return nextJournals[0]?.document_id ?? "";
+       });
+       setSelectedDocumentIds((current) => {
+         const valid = current.filter((id) =>
+           nextJournals.some((journal) => journal.document_id === id),
+         );
+         return valid.length > 0
+           ? valid
+           : nextJournals[0]?.document_id
+             ? [nextJournals[0].document_id]
+             : [];
+       });
     } catch (caughtError) {
       setError(
         caughtError instanceof Error
@@ -213,7 +284,17 @@ export default function Home() {
     } finally {
       setIsLoadingJournals(false);
     }
-  }
+  }, [sessionId]);
+
+  useEffect(() => {
+    if (!sessionId) {
+      return;
+    }
+    const frame = window.requestAnimationFrame(() => {
+      void loadJournals();
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [sessionId, loadJournals]);
 
   async function handleUpload(file: File) {
     if (!sessionId) {
@@ -241,7 +322,7 @@ export default function Home() {
     setError("");
 
     try {
-      const response = await fetch("/journals", {
+       const response = await fetch("/sources/pdf", {
         method: "POST",
         headers: {
           "X-Session-ID": sessionId,
@@ -259,9 +340,10 @@ export default function Home() {
         ...current.filter(
           (journal) => journal.document_id !== uploadedJournal.document_id,
         ),
-      ]);
-      setSelectedDocumentId(uploadedJournal.document_id);
-      resetConversation();
+       ]);
+       setSelectedDocumentId(uploadedJournal.document_id);
+       setSelectedDocumentIds([uploadedJournal.document_id]);
+       resetConversation();
     } catch (caughtError) {
       setError(
         caughtError instanceof Error
@@ -276,13 +358,60 @@ export default function Home() {
     }
   }
 
+  async function handleTextSourceSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!sessionId || !textTitle.trim() || !textContent.trim()) {
+      setError("Add a title and some text before saving the source.");
+      return;
+    }
+
+    setIsUploading(true);
+    setError("");
+    try {
+      const response = await fetch("/sources/text", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Session-ID": sessionId,
+        },
+        body: JSON.stringify({
+          title: textTitle,
+          text: textContent,
+          language,
+        }),
+      });
+      if (!response.ok) {
+        throw new Error(await readApiError(response, "Unable to save text source."));
+      }
+      const source: Journal = await response.json();
+      setJournals((current) => [
+        source,
+        ...current.filter((item) => item.document_id !== source.document_id),
+      ]);
+      setSelectedDocumentId(source.document_id);
+      setSelectedDocumentIds([source.document_id]);
+      setTextTitle("");
+      setTextContent("");
+      setIsTextSourceOpen(false);
+      resetConversation();
+    } catch (caughtError) {
+      setError(
+        caughtError instanceof Error
+          ? caughtError.message
+          : "Unable to save text source.",
+      );
+    } finally {
+      setIsUploading(false);
+    }
+  }
+
   async function handleDelete(journal: Journal) {
     if (!sessionId) {
       setError("Session is still loading. Please try again.");
       return;
     }
 
-    const confirmed = window.confirm(`Delete ${journal.filename}?`);
+    const confirmed = window.confirm(`Delete ${journal.title ?? journal.filename ?? "this source"}?`);
     if (!confirmed) {
       return;
     }
@@ -291,7 +420,7 @@ export default function Home() {
     setError("");
 
     try {
-      const response = await fetch(`/journals/${journal.document_id}`, {
+      const response = await fetch(`/sources/${journal.document_id}`, {
         method: "DELETE",
         headers: {
           "X-Session-ID": sessionId,
@@ -311,6 +440,14 @@ export default function Home() {
           setSelectedDocumentId(nextJournals[0]?.document_id ?? "");
           resetConversation();
         }
+
+        setSelectedDocumentIds((current) => {
+          const next = current.filter((id) => id !== journal.document_id);
+          if (next.length > 0 || nextJournals.length === 0) {
+            return next;
+          }
+          return [nextJournals[0].document_id];
+        });
 
         return nextJournals;
       });
@@ -371,7 +508,10 @@ export default function Home() {
         body: JSON.stringify({
           message: userText,
           thread_id: currentThreadId,
-          document_id: selectedDocumentId,
+          document_id: selectedDocumentId || null,
+          document_ids: selectedDocumentIds,
+          mode,
+          language,
         }),
       });
 
@@ -435,6 +575,25 @@ export default function Home() {
             }
           }
 
+          if (eventName === "artifact" && data) {
+            try {
+              const nextArtifact = JSON.parse(data) as StudyArtifact;
+              setMessages((current) =>
+                current.map((item) =>
+                  item.id === assistantMessageId
+                    ? { ...item, artifact: nextArtifact }
+                    : item,
+                ),
+              );
+            } catch {
+              // Ignore malformed artifacts; the answer title remains visible.
+            }
+          }
+
+          if (eventName === "error" && data) {
+            setError(data);
+          }
+
           if (eventName === "message" && data && data !== "[DONE]") {
             assistantText += data;
             setMessages((current) =>
@@ -482,6 +641,42 @@ export default function Home() {
     setError("");
   }
 
+function toggleDocumentSelection(documentId: string) {
+  setSelectedDocumentIds((current) => {
+    if (current.includes(documentId)) {
+      const next = current.filter((id) => id !== documentId);
+      setSelectedDocumentId((currentPrimary) =>
+        currentPrimary === documentId ? next[0] ?? "" : currentPrimary,
+      );
+      return next;
+    }
+
+    setSelectedDocumentId((currentPrimary) => currentPrimary || documentId);
+    return [...current, documentId];
+  });
+}
+
+function saveArtifact(artifact: StudyArtifact) {
+  setSavedArtifacts((current) => [
+    artifact,
+    ...current.filter(
+      (item) => !(item.title === artifact.title && item.type === artifact.type),
+    ),
+  ]);
+}
+
+  function exportArtifact(artifact: StudyArtifact) {
+    const blob = new Blob([JSON.stringify(artifact, null, 2)], {
+      type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `${artifact.title.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.json`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  }
+
   return (
     <main className="grid h-screen overflow-hidden bg-[var(--surface)] text-[var(--ink)] md:grid-cols-[320px_1fr]">
       <aside className="flex min-h-0 flex-col border-b border-[var(--line)] bg-white md:border-b-0 md:border-r">
@@ -509,6 +704,16 @@ export default function Home() {
             ) : (
               <Upload className="h-4 w-4" />
             )}
+          </button>
+          <button
+            type="button"
+            onClick={() => setIsTextSourceOpen(true)}
+            disabled={hasReachedJournalLimit || !sessionId}
+            className="flex h-10 w-10 items-center justify-center rounded border border-[var(--line)] bg-white text-[var(--muted)] transition hover:border-[var(--accent)] hover:text-[var(--ink)] disabled:cursor-not-allowed disabled:opacity-60"
+            aria-label="Paste text source"
+            title="Paste text source"
+          >
+            <ClipboardPaste className="h-4 w-4" />
           </button>
           <input
             ref={fileInputRef}
@@ -574,28 +779,38 @@ export default function Home() {
                         : "border-[var(--line)] bg-white hover:border-[var(--accent)]"
                     }`}
                   >
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSelectedDocumentId(journal.document_id);
-                        resetConversation();
-                      }}
-                      className="min-w-0 text-left"
-                    >
+                    <div className="flex min-w-0 items-start gap-2">
+                      <input
+                        type="checkbox"
+                        checked={selectedDocumentIds.includes(journal.document_id)}
+                        onChange={() => toggleDocumentSelection(journal.document_id)}
+                        className="mt-1 accent-[var(--accent)]"
+                        aria-label={`Select ${journal.title ?? journal.filename ?? "source"}`}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedDocumentId(journal.document_id);
+                          setSelectedDocumentIds([journal.document_id]);
+                          resetConversation();
+                        }}
+                        className="min-w-0 text-left"
+                      >
                       <span className="flex items-center gap-2 text-sm font-medium">
                         <FileText className="h-4 w-4 shrink-0 text-[var(--accent)]" />
-                        <span className="truncate">{journal.filename}</span>
+                        <span className="truncate">{journal.title ?? journal.filename ?? "Untitled source"}</span>
                       </span>
                       <span className="mt-2 block text-xs text-[var(--muted)]">
-                        {journal.pages} pages · {journal.chunks} chunks
+                        {journal.source_type ?? "pdf"} · {journal.pages} pages · {journal.chunks} chunks
                       </span>
-                    </button>
+                      </button>
+                    </div>
                     <button
                       type="button"
                       onClick={() => void handleDelete(journal)}
                       disabled={isDeleting}
                       className="flex h-9 w-9 items-center justify-center rounded text-[var(--muted)] transition hover:bg-[var(--warning)] hover:text-[var(--warning-ink)] disabled:cursor-not-allowed disabled:opacity-60"
-                      aria-label={`Delete ${journal.filename}`}
+                      aria-label={`Delete ${journal.title ?? journal.filename ?? "source"}`}
                       title="Delete journal"
                     >
                       {isDeleting ? (
@@ -610,6 +825,27 @@ export default function Home() {
             </div>
           )}
         </div>
+
+        {savedArtifacts.length > 0 && (
+          <div className="shrink-0 border-t border-[var(--line)] p-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
+              Saved notes
+            </p>
+            <div className="mt-2 max-h-32 space-y-1 overflow-y-auto">
+              {savedArtifacts.map((artifact) => (
+                <button
+                  key={`${artifact.type}-${artifact.title}`}
+                  type="button"
+                  onClick={() => exportArtifact(artifact)}
+                  className="block w-full truncate rounded bg-[var(--soft)] px-2 py-1.5 text-left text-xs text-[var(--ink)] hover:bg-[var(--success)]"
+                  title="Export note"
+                >
+                  {artifact.title}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </aside>
 
       <section className="flex min-h-0 flex-col">
@@ -619,7 +855,9 @@ export default function Home() {
               Chat
             </p>
             <h2 className="mt-1 truncate text-xl font-semibold">
-              {selectedJournal?.filename ?? "No journal selected"}
+              {selectedDocumentIds.length > 1
+                ? `${selectedDocumentIds.length} sources selected`
+                : selectedJournal?.title ?? selectedJournal?.filename ?? "No source selected"}
             </h2>
           </div>
           <button
@@ -632,6 +870,14 @@ export default function Home() {
             <RefreshCw className="h-4 w-4" />
           </button>
         </header>
+
+        <StudyModeToolbar
+          mode={mode}
+          language={language}
+          selectedCount={selectedDocumentIds.length}
+          onModeChange={setMode}
+          onLanguageChange={setLanguage}
+        />
 
         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-5">
           {messages.map((item) => (
@@ -681,6 +927,9 @@ export default function Home() {
                           ))}
                         </div>
                       </div>
+                    ) : null}
+                    {item.role === "assistant" && item.artifact ? (
+                      <ArtifactCard artifact={item.artifact} onSave={saveArtifact} />
                     ) : null}
                   </>
                 ) : (
@@ -744,6 +993,51 @@ export default function Home() {
           </div>
         </form>
       </section>
+
+      {isTextSourceOpen && (
+        <div className="fixed inset-0 z-20 flex items-center justify-center bg-black/30 p-4">
+          <form
+            onSubmit={handleTextSourceSubmit}
+            className="w-full max-w-xl rounded-lg border border-[var(--line)] bg-white p-5 shadow-xl"
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
+                  New source
+                </p>
+                <h2 className="mt-1 text-lg font-semibold">Paste notes or an abstract</h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsTextSourceOpen(false)}
+                className="text-sm text-[var(--muted)] hover:text-[var(--ink)]"
+              >
+                Close
+              </button>
+            </div>
+            <input
+              value={textTitle}
+              onChange={(event) => setTextTitle(event.target.value)}
+              placeholder="Source title"
+              className="mt-4 w-full rounded border border-[var(--line)] px-3 py-2 text-sm outline-none focus:border-[var(--accent)]"
+            />
+            <textarea
+              value={textContent}
+              onChange={(event) => setTextContent(event.target.value)}
+              placeholder="Paste the text you want to study..."
+              rows={10}
+              className="mt-3 w-full resize-y rounded border border-[var(--line)] px-3 py-2 text-sm leading-6 outline-none focus:border-[var(--accent)]"
+            />
+            <button
+              type="submit"
+              disabled={isUploading}
+              className="mt-3 rounded bg-[var(--accent)] px-4 py-2 text-sm font-medium text-white hover:bg-[var(--accent-strong)] disabled:opacity-60"
+            >
+              {isUploading ? "Saving..." : "Save source"}
+            </button>
+          </form>
+        </div>
+      )}
     </main>
   );
 }

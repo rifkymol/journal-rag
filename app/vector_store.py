@@ -33,13 +33,19 @@ def load_vector_store():
 
     return vectore_store
 
-def create_retriever(vector_store, document_id: str):
+def create_retriever(vector_store, document_ids: str | list[str]):
+    if isinstance(document_ids, str):
+        document_ids = [document_ids]
+
+    document_filter = (
+        {"document_id": document_ids[0]}
+        if len(document_ids) == 1
+        else {"document_id": {"$in": document_ids}}
+    )
     retriever = vector_store.as_retriever(
         search_kwargs={
             "k": 8,
-            "filter": {
-                "document_id": document_id
-            }
+            "filter": document_filter,
         }
     )
 

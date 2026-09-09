@@ -13,6 +13,7 @@ from app.journal_lookup import (
     lookup_related_scholarly_references,
 )
 from app.llm import llm
+from app.models import ChatMode, Language, StudyArtifact
 from app.observability import get_langfuse_client, update_observation
 from app.vector_store import create_retriever, load_vector_store
 
@@ -20,16 +21,20 @@ RequestRoute = Literal[
     "journal_lookup",
     "rag",
     "missing_document",
+    "study_artifact",
 ]
 
 
 class RAGState(TypedDict):
     messages: Annotated[list[BaseMessage], add_messages]
-    document_id: str | None
+    document_ids: list[str]
+    mode: ChatMode
+    language: Language
     request_route: RequestRoute
     search_query: str
     context: str
     sources: list[dict]
+    artifact: dict | None
 
 
 vector_store = load_vector_store()
@@ -39,14 +44,21 @@ def route_request(state: RAGState):
     latest_message = state["messages"][-1]
     latest_content = str(latest_message.content)
 
-    if is_journal_lookup_request(latest_content):
+    mode = state.get("mode", "auto")
+
+    if mode == "web_references" or is_journal_lookup_request(latest_content):
         return {
             "request_route": "journal_lookup"
         }
 
-    if state.get("document_id") is None:
+    if not state.get("document_ids"):
         return {
             "request_route": "missing_document"
+        }
+
+    if mode in {"summarize", "compare", "quiz", "flashcards", "citations"}:
+        return {
+            "request_route": "study_artifact"
         }
 
     return {
@@ -158,7 +170,7 @@ def retrieve(state: RAGState):
             name="prepare-retrieved-context",
             input={
                 "query": state["search_query"],
-                "document_id": state["document_id"],
+                "document_ids": state["document_ids"],
             },
         )
         if langfuse is not None
@@ -168,7 +180,7 @@ def retrieve(state: RAGState):
     with observation as span:
         retriever = create_retriever(
             vector_store,
-            state["document_id"]
+            state["document_ids"]
         )
 
         documents = retriever.invoke(
@@ -188,7 +200,8 @@ def retrieve(state: RAGState):
                 "source": Path(
                     document.metadata.get("source", "")
                 ).name,
-                "page": document.metadata.get("page", 0) + 1
+                "page": document.metadata.get("page", 0) + 1,
+                "source_id": document.metadata.get("document_id"),
             }
             for document in documents
         ]
@@ -216,6 +229,13 @@ def generate(state: RAGState):
     if not source_lines:
         source_lines = "- No retrieved sources available"
 
+    language = state.get("language", "auto")
+    language_instruction = {
+        "en": "Answer in English.",
+        "id": "Jawab dalam Bahasa Indonesia.",
+        "auto": "Answer in the same language as the user's latest message.",
+    }[language]
+
     system_message = SystemMessage(
         content=f"""
 You are an assistant that answers questions using retrieved context from an uploaded document.
@@ -229,6 +249,7 @@ Important rules:
 - If the retrieved context is not enough to answer, say the answer was not found in the retrieved context.
 - Do not add inline source citations after every sentence.
 - Do not write a "Sources" section in the answer text. The interface will display sources separately.
+- {language_instruction}
 
 Retrieved context:
 {state["context"]}
@@ -257,6 +278,51 @@ Answer clearly and concisely. If you don't know the answer, just says so
     }
 
 
+def generate_study_artifact(state: RAGState):
+    mode = state.get("mode", "summarize")
+    artifact_type = {
+        "summarize": "summary",
+        "compare": "comparison",
+        "quiz": "quiz",
+        "flashcards": "flashcards",
+        "citations": "citations",
+    }.get(mode, "summary")
+    language = state.get("language", "auto")
+    language_instruction = {
+        "en": "Use English.",
+        "id": "Gunakan Bahasa Indonesia.",
+        "auto": "Use the same language as the user's latest message.",
+    }[language]
+
+    instructions = {
+        "summary": "Create a concise research brief with research question, method, findings, limitations, and key terms.",
+        "comparison": "Compare the selected sources. Include agreements, differences, methods, findings, and limitations, clearly attributing each point to a source.",
+        "quiz": "Create five questions with answers and brief explanations. Mix recall and understanding questions.",
+        "flashcards": "Create ten study flashcards with a question on the front and a concise answer on the back.",
+        "citations": "Extract citation-ready references from the selected sources. Do not invent missing bibliographic fields.",
+    }[artifact_type]
+
+    structured_llm = llm.with_structured_output(StudyArtifact)
+    response = structured_llm.invoke([
+        SystemMessage(content=f"""
+You create grounded study artifacts from retrieved document context.
+{language_instruction}
+{instructions}
+Return an artifact with type exactly '{artifact_type}', a useful title, and a JSON data object.
+Use only the retrieved context. If a detail is unavailable, say so explicitly.
+
+Retrieved context:
+{state["context"]}
+"""),
+        *state["messages"],
+    ])
+    artifact = response.model_dump() if isinstance(response, StudyArtifact) else StudyArtifact.model_validate(response).model_dump()
+    return {
+        "artifact": artifact,
+        "messages": [AIMessage(content=artifact["title"])],
+    }
+
+
 graph_builder = StateGraph(RAGState)
 
 graph_builder.add_node("route_request", route_request)
@@ -265,6 +331,7 @@ graph_builder.add_node("lookup_journal_references", lookup_journal_references)
 graph_builder.add_node("rewrite_query", rewrite_query)
 graph_builder.add_node("retrieve", retrieve)
 graph_builder.add_node("generate", generate)
+graph_builder.add_node("study_artifact", generate_study_artifact)
 
 graph_builder.add_edge(START, "route_request")
 graph_builder.add_conditional_edges(
@@ -274,13 +341,22 @@ graph_builder.add_conditional_edges(
         "journal_lookup": "lookup_journal_references",
         "rag": "rewrite_query",
         "missing_document": "missing_document",
+        "study_artifact": "rewrite_query",
     }
 )
 graph_builder.add_edge("lookup_journal_references", END)
 graph_builder.add_edge("missing_document", END)
 graph_builder.add_edge("rewrite_query", "retrieve")
-graph_builder.add_edge("retrieve", "generate")
+graph_builder.add_conditional_edges(
+    "retrieve",
+    lambda state: "study_artifact" if state.get("request_route") == "study_artifact" else "generate",
+    {
+        "study_artifact": "study_artifact",
+        "generate": "generate",
+    },
+)
 graph_builder.add_edge("generate", END)
+graph_builder.add_edge("study_artifact", END)
 
 memory = InMemorySaver()
 

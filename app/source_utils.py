@@ -37,22 +37,24 @@ def format_page_ranges(pages: list[int]) -> str:
 
 
 def compact_sources(sources: list[dict]) -> list[dict]:
-    grouped_sources: dict[str, set[int]] = {}
+    grouped_sources: dict[tuple[str, str | None], set[int]] = {}
 
     for source in sources:
         source_name = str(source.get("source") or "Unknown source")
+        source_id = source.get("source_id")
         page = source.get("page")
 
         if not isinstance(page, int):
             continue
 
-        grouped_sources.setdefault(source_name, set()).add(page)
+        grouped_sources.setdefault((source_name, source_id), set()).add(page)
 
     return [
         {
             "source": source_name,
             "pages": sorted(pages),
             "page_label": format_page_ranges(list(pages)),
+            "source_id": source_id,
         }
-        for source_name, pages in grouped_sources.items()
+        for (source_name, source_id), pages in grouped_sources.items()
     ]

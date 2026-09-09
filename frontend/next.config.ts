@@ -27,6 +27,14 @@ const nextConfig: NextConfig = {
         source: "/journals/:path*",
         destination: `${normalizedApiBaseUrl}/journals/:path*`,
       },
+      {
+        source: "/sources",
+        destination: `${normalizedApiBaseUrl}/sources`,
+      },
+      {
+        source: "/sources/:path*",
+        destination: `${normalizedApiBaseUrl}/sources/:path*`,
+      },
     ];
   },
 };
