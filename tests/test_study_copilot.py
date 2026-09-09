@@ -1,14 +1,20 @@
 import unittest
-from unittest.mock import patch
+from contextlib import nullcontext
+from unittest.mock import MagicMock, patch
 
 from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import AIMessage, HumanMessage
 
 from app.main import app
-from app.chat_stream import get_retrieve_sources
-from app.models import ChatRequest, SourceTextRequest
-from app.rag_graph import route_request
+from app.chat_stream import (
+    get_artifact,
+    get_message_content,
+    get_retrieve_sources,
+    stream_chat_response,
+)
+from app.models import ChatRequest, SourceTextRequest, StudyArtifact
+from app.rag_graph import generate_study_artifact, route_request
 from app.source_store import normalize_source
 from app.source_utils import compact_sources
 
@@ -42,13 +48,14 @@ class StudyCopilotContractTests(unittest.TestCase):
             SourceTextRequest(title="Notes", text="   ")
 
     def test_route_uses_study_artifact_for_explicit_modes(self):
-        route = route_request({
-            "messages": [HumanMessage(content="Make flashcards")],
-            "document_ids": ["source-1"],
-            "mode": "flashcards",
-        })
+        for mode in ("summarize", "compare", "quiz", "flashcards", "citations"):
+            route = route_request({
+                "messages": [HumanMessage(content="Study this source")],
+                "document_ids": ["source-1"],
+                "mode": mode,
+            })
 
-        self.assertEqual(route["request_route"], "study_artifact")
+            self.assertEqual(route["request_route"], "study_artifact")
 
     def test_route_requires_a_source_for_document_modes(self):
         route = route_request({
@@ -79,6 +86,53 @@ class StudyCopilotContractTests(unittest.TestCase):
         event = {"data": {"output": {"sources": sources}}}
 
         self.assertEqual(get_retrieve_sources(event), sources)
+
+    def test_artifact_and_message_parsers_ignore_string_outputs(self):
+        event = {"data": {"output": "intermediate output"}}
+
+        self.assertIsNone(get_artifact(event))
+        self.assertEqual(get_message_content("intermediate output"), "")
+
+    def test_artifact_and_message_parsers_extract_mapping_outputs(self):
+        event = {
+            "data": {
+                "output": {
+                    "artifact": {
+                        "type": "summary",
+                        "title": "Research brief",
+                        "data": {"findings": []},
+                    },
+                    "messages": [HumanMessage(content="Research brief")],
+                }
+            }
+        }
+
+        self.assertEqual(get_artifact(event)["title"], "Research brief")
+        self.assertEqual(get_message_content(event["data"]["output"]), "Research brief")
+
+    def test_study_artifact_uses_function_calling_output(self):
+        response = StudyArtifact(
+            type="summary",
+            title="Research brief",
+            data={"findings": []},
+        )
+        structured_llm = MagicMock()
+        structured_llm.invoke.return_value = response
+
+        with patch("app.rag_graph.llm") as mocked_llm:
+            mocked_llm.with_structured_output.return_value = structured_llm
+            result = generate_study_artifact({
+                "messages": [HumanMessage(content="Summarize this")],
+                "mode": "summarize",
+                "language": "en",
+                "context": "A grounded context.",
+            })
+
+        mocked_llm.with_structured_output.assert_called_once_with(
+            StudyArtifact,
+            method="function_calling",
+        )
+        self.assertEqual(result["artifact"], response.model_dump())
 
     def test_legacy_source_records_receive_generic_metadata(self):
         source = normalize_source({
@@ -135,6 +189,77 @@ class StudyCopilotContractTests(unittest.TestCase):
         )
 
         self.assertEqual(response.status_code, 404)
+
+
+class StudyCopilotStreamTests(unittest.IsolatedAsyncioTestCase):
+    async def test_study_artifact_stream_ignores_intermediate_string_events(self):
+        artifact = {
+            "type": "summary",
+            "title": "Research brief",
+            "data": {"findings": []},
+        }
+
+        class FakeGraph:
+            async def astream_events(self, *_args, **_kwargs):
+                yield {
+                    "event": "on_chain_end",
+                    "metadata": {"langgraph_node": "study_artifact"},
+                    "data": {"output": "intermediate output"},
+                }
+                yield {
+                    "event": "on_chain_end",
+                    "metadata": {"langgraph_node": "study_artifact"},
+                    "data": {
+                        "output": {
+                            "artifact": artifact,
+                            "messages": [AIMessage(content="Research brief")],
+                        }
+                    },
+                }
+
+        with (
+            patch("app.chat_stream.rag_graph", FakeGraph()),
+            patch("app.chat_stream.get_langfuse_client", return_value=None),
+            patch("app.chat_stream.create_langfuse_handler", return_value=None),
+            patch("app.chat_stream.propagate_chat_attributes", return_value=nullcontext()),
+        ):
+            events = [
+                event
+                async for event in stream_chat_response(
+                    "Summarize this",
+                    "thread-1",
+                    ["source-1"],
+                    "session-1",
+                    "summarize",
+                    "en",
+                )
+            ]
+
+        self.assertEqual(
+            [event["event"] for event in events],
+            ["status", "message", "artifact", "done"],
+        )
+        self.assertEqual(events[-1]["data"], "[DONE]")
+
+    async def test_stream_errors_end_with_error_then_done(self):
+        async def failing_stream(*_args, **_kwargs):
+            raise RuntimeError("structured output failed")
+            yield  # pragma: no cover
+
+        with patch("app.chat_stream._stream_chat_response", failing_stream):
+            events = [
+                event
+                async for event in stream_chat_response(
+                    "Summarize this",
+                    "thread-1",
+                    ["source-1"],
+                    "session-1",
+                    "summarize",
+                    "en",
+                )
+            ]
+
+        self.assertEqual([event["event"] for event in events], ["error", "done"])
 
 
 if __name__ == "__main__":

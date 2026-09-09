@@ -244,3 +244,31 @@
 - Remaining warnings are upstream deprecations for `langchain-community` PDF loading and FastAPI `on_event`.
 - Fixed the chat SSE retrieve-event type mismatch that caused the generic study-assistant error.
 - Direct graph-path smoke test now returns streamed messages, sources, and `done`.
+
+# Fix Study Mode No Answer Responses
+
+## Plan
+
+- [x] Fix structured-output compatibility for study artifacts.
+- [x] Make study artifact and final message event parsing type-safe.
+- [x] Prevent frontend fallback text from masking backend errors or artifacts.
+- [x] Add backend regression tests for artifact configuration, event parsing, and SSE ordering.
+- [x] Verify every study mode and preserve Ask/Explain behavior.
+- [x] Run final verification and review unrelated-file changes.
+
+## Baseline
+
+- Branch: `codex/fix-study-mode-artifacts`
+- Backend compile passed.
+- Backend tests passed: 12 tests.
+- Frontend lint passed.
+- Frontend build passed.
+- `git diff --check` passed.
+
+## Review
+
+- `pytest -q` passed: 17 tests.
+- Live SSE smoke test passed for Ask, Explain, Summarize, Quiz, Flashcards, Citations, and Compare.
+- Artifact modes returned `status`, `message`, `sources`, `artifact`, and `done` without errors.
+- Browser smoke test rendered a summary artifact successfully in Brief mode.
+- Only study graph/stream handling, frontend stream fallback, tests, and task documentation changed.

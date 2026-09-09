@@ -25,20 +25,40 @@ FINAL_MESSAGE_NODES = {
 }
 
 
+def get_event_output(event: dict) -> dict | None:
+    event_data = event.get("data")
+    if not isinstance(event_data, dict):
+        return None
+
+    output = event_data.get("output")
+    return output if isinstance(output, dict) else None
+
+
 def get_retrieve_sources(event: dict) -> list[dict]:
-    event_data = event.get("data") or {}
-    output = event_data.get("output") if isinstance(event_data, dict) else None
-    if not isinstance(output, dict):
+    output = get_event_output(event)
+    if output is None:
         return []
 
     sources = output.get("sources", [])
     return sources if isinstance(sources, list) else []
 
 
-def get_message_content(output: dict) -> str:
+def get_artifact(event: dict) -> dict | None:
+    output = get_event_output(event)
+    if output is None:
+        return None
+
+    artifact = output.get("artifact")
+    return artifact if isinstance(artifact, dict) else None
+
+
+def get_message_content(output: object) -> str:
+    if not isinstance(output, dict):
+        return ""
+
     messages = output.get("messages", [])
 
-    if not messages:
+    if not isinstance(messages, list) or not messages:
         return ""
 
     latest_message = messages[-1]
@@ -168,10 +188,14 @@ async def _stream_chat_response(
                 node_name = metadata.get("langgraph_node")
 
                 if event["event"] == "on_chain_end" and node_name == "retrieve":
-                    sources = get_retrieve_sources(event)
+                    next_sources = get_retrieve_sources(event)
+                    if next_sources:
+                        sources = next_sources
 
                 if event["event"] == "on_chain_end" and node_name == "study_artifact":
-                    artifact = event["data"].get("output", {}).get("artifact")
+                    next_artifact = get_artifact(event)
+                    if next_artifact is not None:
+                        artifact = next_artifact
 
                 if (
                     event["event"] == "on_chat_model_stream"
@@ -190,7 +214,7 @@ async def _stream_chat_response(
                     event["event"] == "on_chain_end"
                     and node_name in FINAL_MESSAGE_NODES
                 ):
-                    content = get_message_content(event["data"].get("output", {}))
+                    content = get_message_content(get_event_output(event))
 
                     if content:
                         answer_chunks.append(content)
