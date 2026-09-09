@@ -527,6 +527,8 @@ export default function Home() {
       const decoder = new TextDecoder();
       let buffer = "";
       let assistantText = "";
+      let receivedArtifact = false;
+      let receivedError = false;
 
       while (true) {
         const { done, value } = await reader.read();
@@ -578,6 +580,7 @@ export default function Home() {
           if (eventName === "artifact" && data) {
             try {
               const nextArtifact = JSON.parse(data) as StudyArtifact;
+              receivedArtifact = true;
               setMessages((current) =>
                 current.map((item) =>
                   item.id === assistantMessageId
@@ -591,6 +594,7 @@ export default function Home() {
           }
 
           if (eventName === "error" && data) {
+            receivedError = true;
             setError(data);
           }
 
@@ -609,7 +613,7 @@ export default function Home() {
         }
       }
 
-      if (!assistantText) {
+      if (!assistantText && !receivedArtifact && !receivedError) {
         setMessages((current) =>
           current.map((item) =>
             item.id === assistantMessageId

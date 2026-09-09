@@ -302,7 +302,10 @@ def generate_study_artifact(state: RAGState):
         "citations": "Extract citation-ready references from the selected sources. Do not invent missing bibliographic fields.",
     }[artifact_type]
 
-    structured_llm = llm.with_structured_output(StudyArtifact)
+    structured_llm = llm.with_structured_output(
+        StudyArtifact,
+        method="function_calling",
+    )
     response = structured_llm.invoke([
         SystemMessage(content=f"""
 You create grounded study artifacts from retrieved document context.
