@@ -30,11 +30,11 @@ async def create_pdf_source(
     if file.content_type != "application/pdf":
         raise HTTPException(status_code=400, detail="Only PDF files are allowed")
 
-if existing_count >= MAX_SOURCES_PER_SESSION:
-    raise HTTPException(
-        status_code=400,
-        detail="You can create a maximum of 3 sources per session. Delete one before adding another.",
-    )
+    if existing_count >= MAX_SOURCES_PER_SESSION:
+        raise HTTPException(
+            status_code=400,
+            detail="You can create a maximum of 3 sources per session. Delete one before adding another.",
+        )
 
     original_name = Path(file.filename or "journal.pdf").name
     if not original_name.lower().endswith(".pdf"):

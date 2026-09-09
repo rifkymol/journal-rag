@@ -1,5 +1,7 @@
 from contextlib import nullcontext
+import asyncio
 import json
+import logging
 
 from langchain_core.messages import AIMessage, HumanMessage
 
@@ -13,11 +15,24 @@ from app.rag_graph import rag_graph
 from app.source_utils import compact_sources
 
 
+logger = logging.getLogger(__name__)
+
+
 FINAL_MESSAGE_NODES = {
     "lookup_journal_references",
     "missing_document",
     "study_artifact",
 }
+
+
+def get_retrieve_sources(event: dict) -> list[dict]:
+    event_data = event.get("data") or {}
+    output = event_data.get("output") if isinstance(event_data, dict) else None
+    if not isinstance(output, dict):
+        return []
+
+    sources = output.get("sources", [])
+    return sources if isinstance(sources, list) else []
 
 
 def get_message_content(output: dict) -> str:
@@ -43,29 +58,28 @@ async def stream_chat_response(
     mode: str = "auto",
     language: str = "auto",
 ):
-import asyncio
-
-try:
-    async for event in _stream_chat_response(
-        message,
-        thread_id,
-        document_ids,
-        session_id,
-        mode,
-        language,
-    ):
-        yield event
-except asyncio.CancelledError:
-    raise
-except Exception:
-    yield {
-        "event": "error",
-        "data": "The study assistant could not complete this request.",
-    }
-    yield {
-        "event": "done",
-        "data": "[DONE]",
-    }
+    try:
+        async for event in _stream_chat_response(
+            message,
+            thread_id,
+            document_ids,
+            session_id,
+            mode,
+            language,
+        ):
+            yield event
+    except asyncio.CancelledError:
+        raise
+    except Exception:
+        logger.exception("Study assistant stream failed")
+        yield {
+            "event": "error",
+            "data": "The study assistant could not complete this request.",
+        }
+        yield {
+            "event": "done",
+            "data": "[DONE]",
+        }
 
 
 async def _stream_chat_response(
@@ -154,8 +168,7 @@ async def _stream_chat_response(
                 node_name = metadata.get("langgraph_node")
 
                 if event["event"] == "on_chain_end" and node_name == "retrieve":
-                    retrieve_output = event["data"].get("output", {})
-                    sources = retrieve_output.get("sources", [])
+                    sources = get_retrieve_sources(event)
 
                 if event["event"] == "on_chain_end" and node_name == "study_artifact":
                     artifact = event["data"].get("output", {}).get("artifact")

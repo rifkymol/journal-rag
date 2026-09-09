@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 from langchain_core.messages import HumanMessage
 
 from app.main import app
+from app.chat_stream import get_retrieve_sources
 from app.models import ChatRequest, SourceTextRequest
 from app.rag_graph import route_request
 from app.source_store import normalize_source
@@ -67,6 +68,17 @@ class StudyCopilotContractTests(unittest.TestCase):
 
         self.assertEqual(len(sources), 2)
         self.assertEqual(sources[0]["page_label"], "1-2")
+
+    def test_retrieve_event_parser_ignores_non_mapping_output(self):
+        event = {"data": {"output": "retrieved text"}}
+
+        self.assertEqual(get_retrieve_sources(event), [])
+
+    def test_retrieve_event_parser_extracts_sources_from_mapping_output(self):
+        sources = [{"source": "paper.pdf", "page": 1}]
+        event = {"data": {"output": {"sources": sources}}}
+
+        self.assertEqual(get_retrieve_sources(event), sources)
 
     def test_legacy_source_records_receive_generic_metadata(self):
         source = normalize_source({
